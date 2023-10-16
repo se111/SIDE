@@ -192,7 +192,6 @@ def data_split(args, base_network):
                 hard_path.append(img[id])
                 hard_idx.append(id)
 
-        """mindist: a distance matrix which store the minimum cosine distance between the prototypes and features """
 
         acc = 1 - fault / (args.class_num*NUMS)
 
@@ -227,14 +226,10 @@ def mse_loss(pred, target):
     return loss
 
 def train(args):
-    ## set pre-process
 
     class_num = args.class_num
     class_weight_src = torch.ones(class_num, ).cuda()
 
-    ##################################################################################################
-
-    ## set base network
     if args.net == 'resnet101':
         netG = utils.ResBase101().cuda()
         net_G_tea = utils.ResBase101().cuda()
@@ -274,8 +269,6 @@ def train(args):
     args.out_file.write('load source model from '+ args.ckpt + '\n')
     args.out_file.flush()
 
-    """split the target set"""
-
     mid_path, hard_path = data_split(args, base_network)
 
     ## set dataloaders
@@ -286,7 +279,7 @@ def train(args):
     # eval_iter = args.val_num
 
     ## Memory Bank
-    if args.pl.endswith('na'):
+    if args.pl.endswith('mem'):
         mem_fea = torch.rand(len(dset_loaders["target"].dataset), args.bottleneck_dim).cuda()
         mem_fea = mem_fea / torch.norm(mem_fea, p=2, dim=1, keepdim=True)
         mem_cls = torch.ones(len(dset_loaders["target"].dataset), class_num).cuda() / class_num
@@ -344,11 +337,10 @@ def train(args):
             # print('src:',src_cls)
             total_loss += src_cls * args.CIDCVCL_ratio
 
-        """ hard sample soft label generation """
 
         softmax_out = nn.Softmax(dim=1)(outputs_target)
 
-        if args.pl.endswith('na'):
+        if args.pl.endswith('mem'):
             dis = -torch.mm(features_target.detach(), mem_fea.t())
             for di in range(dis.size(0)):
                 dis[di, idx[di]] = torch.max(dis)
@@ -365,7 +357,6 @@ def train(args):
             raise RuntimeError('pseudo label error')
 
 
-        """ mixup mid and hard samples """
 
         mix_cls_loss = torch.tensor(0.).cuda()
 
@@ -380,7 +371,6 @@ def train(args):
             
             mix_target = sft_label * rho + targets_s * (1-rho)
             mix_cls_loss += eff * (KLD(nn.Softmax(dim=1)(mix_out), mix_target) )
-        """ hard samples regression loss """
 
         remix_reg_loss = torch.tensor(0.).cuda()
 
@@ -449,8 +439,7 @@ def train(args):
         optimizer_p.step()
 
         
-        """ update the memory bank """
-        if args.pl.endswith('na'):
+        if args.pl.endswith('mem'):
             base_network.eval() 
             with torch.no_grad():
                 features_target, outputs_target = base_network(inputs_target)
@@ -586,9 +575,7 @@ if __name__ == "__main__":
     if args.dset == 'IMAGECLERF':
         names = ['c','i','p']
         args.class_num = 12
-    # if args.dset == 'digit':
-    #     names = []
-    #     args.class_num = 
+
 
     if(args.ckpt is None):
         if(args.ckpt_epoch is not None):
